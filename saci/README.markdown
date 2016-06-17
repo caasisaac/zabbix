@@ -26,9 +26,9 @@ Well, to make this magic works:
     ````
 ex:
 
-
-perl saci saci.conf PROBLEM Teste host%Teste ping High%Disaster%192.168.1.1%yes%12:00:00%02/04/2016
-
+    ```` bash
+    $perl saci saci.conf PROBLEM Teste host%Teste ping High%Disaster%192.168.1.1%yes%12:00:00%02/04/2016
+    ````
 
 
 3. Configure Zabbix action to use saci script.
@@ -36,18 +36,18 @@ perl saci saci.conf PROBLEM Teste host%Teste ping High%Disaster%192.168.1.1%yes%
 4.Set your condition My config setted:
 
 
-Type : Or
+    Type : Or
 
-A   Value The Trigger = Problem
-B   Value The Trigger = ok
+    A   Value The Trigger = Problem
+    B   Value The Trigger = ok
 
 4. In Command Remote set server your server Otrs
 
 5. custom Script execute with agente mode (install agent mode in server otrs)
 
-My custom Script in server 
+      My custom Script in server 
 
-perl /opt/saci/saci /etc/saci.conf {TRIGGER.STATUS} {HOST.NAME}%{TRIGGER.NAME}%{TRIGGER.SEVERITY}%{IPADDRESS}%{EVENT.ACK.STATUS}%{EVENT.TIME}%{EVENT.DATE} 
+      perl /opt/saci/saci /etc/saci.conf {TRIGGER.STATUS} {HOST.NAME}%{TRIGGER.NAME}%{TRIGGER.SEVERITY}%{IPADDRESS}%{EVENT.ACK.STATUS}%{EVENT.TIME}%{EVENT.DATE} 
 
 
 5. Configure the actions and be happy. =)
