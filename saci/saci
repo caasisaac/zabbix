@@ -23,8 +23,10 @@ use strict;
 use warnings;
 use Data::Dumper ;
 use AppConfig qw/:argcount/ ;
+#use WWW::PushBullet;
+use SOAP::Lite('autodispatch', proxy => "http://192.168.20.5/otrs/rpc.pl");
 
-use SOAP::Lite('autodispatch', proxy => "http://otrs.company.com/otrs/rpc.pl");
+
 my $rpc_connect = Core->new()        ;
 my $config = AppConfig->new() ;
 
@@ -46,21 +48,35 @@ $config->define(
     'CLOSE_STATE',   => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none",  },
     'CLOSE_USER',    => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none",  },
     'CLOSE_SUBJECT', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },  
+'PRIORITY1', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY2', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY3', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY4', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY5', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY6', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY11', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY22', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY33', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY44', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
+'PRIORITY55', => { ARGCOUNT => ARGCOUNT_ONE, DEFAULT => "none", },
 );
 
-my $config_file     = shift @ARGV        ;
-my $trigger_subject = shift @ARGV         ;
+my $config_file     = shift @ARGV       ;
+my $trigger_subject = shift @ARGV       ;
+##my $severity_subject= shift @ARGV	;
 my $trigger_body    = join(" ", @ARGV)  ;
 
 unless($config_file) { $config_file = "saci.conf" } ;
 $config->file($config_file) ;
+
 
 my $soap_user       = $config->SOAP_USER()      ;
 my $soap_password   = $config->SOAP_PASSWORD()  ;
 my $open_subject    = $config->OPEN_SUBJECT()   ;
 my $open_queue      = $config->OPEN_QUEUE()     ;  
 my $lock            = $config->LOCK()           ; 
-my $priority        = $config->PRIORITY()       ; 
+#my $priority        = $config->PRIORITY()       ; 
+my $priority ;     #  = $severity_subject       ;
 my $open_state      = $config->OPEN_STATE()     ; 
 my $mail_customer   = $config->MAIL_CUSTOMER()  ; 
 my $open_owner      = $config->OPEN_OWNER()     ; 
@@ -71,24 +87,54 @@ my $open_user       = $config->OPEN_USER()      ;
 my $close_state     = $config->CLOSE_STATE      ; 
 my $close_user      = $config->CLOSE_USER()     ;  
 my $close_subject   = $config->CLOSE_SUBJECT()  ;
-my ( $hostname, $trigger_name ) = split(/:/, $trigger_body) ;
-
+my ( $hostname, $trigger_name, $severity_subject, $ipaddress, $event_ack_status, $event_recovery_time, $event_recovery_date ) = split(/%/, $trigger_body) ;
+my $priority1  = $config->PRIORITY1()       ; 
+my $priority2  = $config->PRIORITY2()       ; 
+my $priority3  = $config->PRIORITY3()       ; 
+my $priority4  = $config->PRIORITY4()       ; 
+my $priority5  = $config->PRIORITY5()       ;
+my $priority6  = $config->PRIORITY6()       ;
+my $priority11  = $config->PRIORITY11()       ; 
+my $priority22  = $config->PRIORITY22()       ; 
+my $priority33  = $config->PRIORITY33()       ; 
+my $priority44  = $config->PRIORITY44()       ;
+my $priority55  = $config->PRIORITY55()       ;
+    
 if ( $trigger_subject eq  $open_subject ) { 
-    my @ticket_ids = search_ticket($hostname, $trigger_name) ;    
-    unless (@ticket_ids ) {
+    my @ticket_ids = search_ticket($hostname, $trigger_name, $open_queue) ;    
+        unless (@ticket_ids ) {
         open_ticket( $hostname, $trigger_name) }
 }
 
+
 if ( $trigger_subject eq $close_subject ) {
-    my @ticket_ids = search_ticket($hostname, $trigger_name) ;    
+    my @ticket_ids = search_ticket($hostname, $trigger_name, $open_queue) ;    
+    my @ticket_ids2 = search_ticket_queue($hostname, $trigger_name) ; 
     if (@ticket_ids) {
-        close_ticket(@ticket_ids) } 
+    #print "@ticket_ids\n um\n";
+    close_ticket(@ticket_ids)  }
+        elsif (@ticket_ids2){ 
+     note_close_ticket(@ticket_ids2)    }           
+    #print "@ticket_ids2\n dois\n";
+     
 }
+
 
 #-- Functions
 
+sub severity_to_priority{
+if ( $severity_subject eq $priority1){$priority = $priority11};
+if ( $severity_subject eq $priority2){$priority = $priority22};
+if ( $severity_subject eq $priority3){$priority = $priority33};
+if ( $severity_subject eq $priority4){$priority = $priority44};   
+if ( $severity_subject eq $priority5){$priority = $priority55};
+if ( $severity_subject eq $priority6){$priority = $priority55};
+}
+
+
 sub open_ticket {
-    my ( $hostname, $trigger_name ) = @_ ;
+severity_to_priority();
+ my ( $hostname, $trigger_name,) = @_ ;
     my $ticket_number = $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject','TicketCreateNumber');
     my %ticket_data = (
     TN           => $ticket_number,
@@ -102,52 +148,138 @@ sub open_ticket {
     OwnerID      => $open_owner,  
     UserID       => $open_owner,    
     Responsible  => $responsible,
-    ) ;
+    );
+    
+    
     my $ticket_id    = $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'TicketCreate', %ticket_data ) ;
 
     my %article_data = (
     TicketID         => $ticket_id,  
-    ArticleType      => 'phone', 
-    SenderType       => 'agent', 
+    ArticleType      => 'webrequest', 
+    SenderType       => 'system',    
     From             => $mail_from,     
-    To               => $mail_to, 
+    OrigHeader => {
+    Subject => "$hostname: $trigger_name",
+  
+     To               => $mail_to,
+    },  
+    To => $mail_to,
     Subject          => "$hostname: $trigger_name",
-    Body             => "$hostname: $trigger_name",    
+    Body             => "$hostname: $ipaddress: $trigger_name",    
     ContentType      => 'text/plain; UTF-8',    
     HistoryType      => 'OwnerUpdate',  
     HistoryComment   => 'Auto Ticket',
     UserID           => 1,
     NoAgentNotify    => 0,     
     AutoResponseType => 'auto reply',    
-    );
+    );    
     $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'ArticleCreate', %article_data) ;
 }
 
 
 sub search_ticket { 
-    my ( $hostname, $trigger_name ) = @_ ;
+severity_to_priority();
+my ( $hostname, $trigger_name, $open_queue ) = @_ ;
+    
     my %ticket_filter = (
     Result        => 'ARRAY' || 'HASH' || 'COUNT',
     StateType     => 'Open',
-    UserID        => $open_user,
-    Lock          => $lock,
-    Queue         => $open_queue,
-    OwnerID       => $open_owner ,
+    UserID  => $open_user,
+    #Locks          => ["$lock"],
+    #QueueIDs     =>     ['7'],
+    Queues         => ["$open_queue"],
+    OwnerIDs       => ["$open_owner"],
     ContentSearch => 'AND',
     Title         => "$hostname: $trigger_name",
     ) ;    
-    my @found_ticket_ids = $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'TicketSearch', %ticket_filter ) ;
-    return @found_ticket_ids ;  
-} 
+    
+    my @found_ticket_ids = $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'TicketSearch', %ticket_filter );
+    return @found_ticket_ids;
+    }
+
+
+sub search_ticket_queue { 
+severity_to_priority();
+my ( $hostname, $trigger_name, $open_queue ) = @_ ;
+    
+    my %ticket_filter = (
+    Result        => 'ARRAY' || 'HASH' || 'COUNT',
+    StateType     => 'Open',
+    UserID  => $open_user,
+    #Locks          => ["$lock"],
+    #QueueIDs     =>     ['7'],
+    #Queues         => ["$open_queue"],
+    #OwnerID       => ["$open_owner"],
+    ContentSearch => 'AND',
+    Title         => "$hostname: $trigger_name",
+    ) ;    
+    
+    my @found_ticket_queue = $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'TicketSearch', %ticket_filter );
+    return @found_ticket_queue;
+    }
+
+
+sub note_close_ticket  { 
+severity_to_priority();    
+
+    my @ticket_ids = @_ ;	
+    foreach my $ticket_id (@ticket_ids) {    
+        
+my %close_info = (
+    
+TicketID         => $ticket_id, # $ticket_number,
+ArticleType      => 'note-internal',                        # email-external|email-internal|phone|fax|...
+SenderType       => 'system',                                # agent|system|customer
+From             => $mail_from,       # not required but useful
+To               => $mail_to, # not required but useful
+Subject          => "Informativo Alarme Normalizado $hostname: $trigger_name",               # required
+Body             => "$hostname: $ipaddress $trigger_name\n Evento reconhecido: $event_ack_status\n Evento Tempo Recuperação: $event_recovery_time\n Evento Data Recuperação: $event_recovery_date\n Alarme Normalizado continuar com a tratativa do ticket para sua finalização",                     # required
+Charset          => 'ISO-8859-15',
+MimeType         => 'text/plain',
+HistoryType      => 'AddNote',                          # EmailCustomer|Move|AddNote|PriorityUpdate|WebRequestCustomer|...
+HistoryComment   => 'Alarme OK',
+UserID           => $open_user,
+UnlockOnAway     => 1,                                      # Unlock ticket if owner is away
+ );
+    
+    
+$rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'ArticleCreate', %close_info );
+        
+        
+            }
+}    
 
 sub close_ticket  { 
-    my @ticket_ids = @_ ;
-    foreach my $ticket_id (@ticket_ids) {
-        my %ticket_status = (
+severity_to_priority();    
+
+    my @ticket_ids = @_ ;	
+    foreach my $ticket_id (@ticket_ids) {    
+        
+my %close = (
+    
+TicketID         => $ticket_id, # $ticket_number,
+ArticleType      => 'note-internal',                        # email-external|email-internal|phone|fax|...
+SenderType       => 'system',                                # agent|system|customer
+From             => $mail_from,       # not required but useful
+To               => $mail_to, # not required but useful
+Subject          => "Tickt Finalizado $hostname: $trigger_name",               # required
+Body             => "$hostname: $ipaddress $trigger_name\n Evento reconhecido: $event_ack_status\n Evento Tempo Recuperação: $event_recovery_time\n Evento Data Recuperação: $event_recovery_date",                     # required
+Charset          => 'ISO-8859-15',
+MimeType         => 'text/plain',
+HistoryType      => 'AddNote',                          # EmailCustomer|Move|AddNote|PriorityUpdate|WebRequestCustomer|...
+HistoryComment   => 'Fechado OK',
+UserID           => $close_user,
+UnlockOnAway     => 1,                                      # Unlock ticket if owner is away
+ );
+        my %ticket_status = (	
         State    => $close_state,
         UserID   => $close_user,
         TicketID => $ticket_id,
-        );
+        );        
+
+$rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'ArticleCreate', %close );
+        
+        
         $rpc_connect->Dispatch( $soap_user, $soap_password, 'TicketObject', 'TicketStateSet', %ticket_status );
     }
 }    

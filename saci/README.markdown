@@ -21,15 +21,39 @@ Well, to make this magic works:
     The body of trigger must be *{HOSTNAME}:{TRIGGER.NAME}*.
 
     ```` bash
-    $ perl saci saci.conf PROBLEM hostname trigger_name 
-    $ perl saci saci.conf OK hostname trigger_name
+    $ perl saci saci.conf PROBLEM hostname%trigger_name 
+    $ perl saci saci.conf OK hostname%trigger_name
     ````
- 
-3. Configure Zabbix Media to use saci script.
+ex:
 
-4. Configure your user to use saci media, and use the path for config path in 'send to' field.
+    ```` bash
+    $perl saci saci.conf PROBLEM Teste host%Teste ping High%Disaster%192.168.1.1%yes%12:00:00%02/04/2016
+    ````
+
+
+3. Configure Zabbix action to use saci script.
+
+4.Set your condition My config setted:
+
+
+    Type : Or
+
+    A   Value The Trigger = Problem
+    B   Value The Trigger = ok
+
+4. In Command Remote set server your server Otrs
+
+5. custom Script execute with agente mode (install agent mode in server otrs)
+
+      My custom Script in server 
+
+      perl /opt/saci/saci /etc/saci.conf {TRIGGER.STATUS} {HOST.NAME}%{TRIGGER.NAME}%{TRIGGER.SEVERITY}%{IPADDRESS}%{EVENT.ACK.STATUS}%{EVENT.TIME}%{EVENT.DATE} 
+
 
 5. Configure the actions and be happy. =)
+
+
+Work in OTRS 5 
 
 
 [1]: http://zabbix.com "Zabbix"
